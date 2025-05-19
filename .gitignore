@@ -155,3 +155,9 @@ node_modules/
 .langgraph_api/
 bot.py
 
+.flake8
+.github/
+.isort.cfg
+.pre-commit-config.yaml
+
+

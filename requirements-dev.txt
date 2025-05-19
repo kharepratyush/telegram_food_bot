@@ -1,0 +1,8 @@
+# Development dependencies for testing and static analysis
+pytest
+pytest-asyncio
+flake8
+black
+isort
+mypy
+types-requests
