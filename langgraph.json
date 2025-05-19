@@ -1,0 +1,7 @@
+{
+    "dependencies": ["./"],
+    "graphs": {
+      "agent": "./src/agents/food_agent.py:food_agent"
+    },
+    "env": ".env"
+  }
