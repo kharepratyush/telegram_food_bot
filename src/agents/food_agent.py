@@ -84,7 +84,7 @@ async def extract_input(state: GraphState) -> GraphState:
         )
         updated_prompt = await update_prompt(FOOD_PROMPT)
         state["messages"] = [
-            #control_msg,
+            # control_msg,
             SystemMessage(content=updated_prompt),
             *messages,
         ]
@@ -180,18 +180,19 @@ async def summarize_history(state: GraphState) -> GraphState:
     messages = state.get("messages", [])[3:]
 
     history = "\n\n".join(
-        f"{type(m).__name__}: {getattr(m, 'content', getattr(m, 'text', ''))}" for m in messages
+        f"{type(m).__name__}: {getattr(m, 'content', getattr(m, 'text', ''))}"
+        for m in messages
     )
 
     if len(history.strip()) == 0:
         return state
 
     prompt = SystemMessage(
-            content=(
-                "You are a helpful assistant that summarizes conversation history into bullet points. "
-                f"Here is the dialogue:\n\n{history}"
-            )
+        content=(
+            "You are a helpful assistant that summarizes conversation history into bullet points. "
+            f"Here is the dialogue:\n\n{history}"
         )
+    )
     summary_msg = await llm.ainvoke([prompt])
 
     updated_prompt = await update_prompt(FOOD_PROMPT)

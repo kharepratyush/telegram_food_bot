@@ -79,6 +79,7 @@ def get_today_date() -> str:
     now = datetime.now()
     return "Today is " + now.strftime("%Y-%m-%d, %A")
 
+
 @tool("get_tomorrow_date", return_direct=False)
 def get_tomorrow_date() -> str:
     """Provides information about future's date.
@@ -90,7 +91,7 @@ def get_tomorrow_date() -> str:
 
 
 @tool("get_future_date", return_direct=False)
-def get_future_date(days_from_current_date = 1) -> str:
+def get_future_date(days_from_current_date=1) -> str:
     """Provides information about future's date.
     Args:
         days_from_current_date (int): Number of days from today. Default is 1 (tomorrow).
