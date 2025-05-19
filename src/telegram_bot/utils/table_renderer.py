@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 from io import BytesIO
+import textwrap
 
 async def table_image_with_colored_header(
     table: dict,
@@ -30,7 +31,6 @@ async def table_image_with_colored_header(
     Returns:
         BytesIO buffer containing the PNG image.
     """
-    import textwrap
 
     def wrap_cell(val):
         if isinstance(val, str) and len(val) > max_row_chars:
@@ -57,7 +57,7 @@ async def table_image_with_colored_header(
         max([str(cell).count("\n") + 1 for cell in row]) for row in df.values
     ] if len(df) > 0 else [1]
     avg_lines = sum(max_lines_per_row) / len(max_lines_per_row) if max_lines_per_row else 1
-    fig_height = max(1.5, (n_rows + 1) * avg_lines * 0.7)
+    fig_height = max(1.5, (n_rows + 1) * avg_lines * 1)
 
     fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=dpi)
     ax.axis("off")

@@ -34,7 +34,7 @@ def internet_search_DDGO(query: str) -> str:
 
 @tool("process_content", return_direct=False)
 def process_content(url: str) -> str:
-    """Processes content from a webpage."""
+    """Processes content from a url"""
 
     response = requests.get(url)
     soup = BeautifulSoup(response.content, "html.parser")
@@ -44,11 +44,11 @@ def process_content(url: str) -> str:
 @tool("internet_search", return_direct=False)
 def internet_search(query: str) -> str:
     """Searches the internet using Tavily."""
-    search_tool = TavilySearchResults(api_key=TAVILY_API_KEY, max_results=5)
+    search_tool = TavilySearchResults(api_key=TAVILY_API_KEY, max_results=10)
     results = search_tool.invoke(query)
 
     # Log the raw results for debugging purposes
-    print("Raw results:", results)
+    #print("Raw results:", results)
 
     if isinstance(results, list) and all(
         isinstance(result, dict) for result in results
@@ -71,13 +71,13 @@ def internet_search(query: str) -> str:
         )
 
 
-@tool("get_today")
+@tool("get_today", return_direct=False)
 def get_today() -> str:
     """Provides information about today's date."""
     now = datetime.now()
     return "Today is "+now.strftime("%Y-%m-%d, %A")
 
-@tool("get_tomorrow")
+@tool("get_tomorrow", return_direct=False)
 def get_tomorrow() -> str:
     """Provides information about tomorrow's date."""
     tomorrow = datetime.now() + timedelta(days=1)

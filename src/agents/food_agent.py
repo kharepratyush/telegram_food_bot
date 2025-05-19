@@ -1,3 +1,15 @@
+"""Food Agent Workflow.
+
+This module defines the asynchronous Food Agent workflow using StateGraph.
+It includes:
+- Input extraction node
+- Input validation node
+- Agent invocation node
+- History summarization node
+- Response sending node
+- Workflow compilation and exposure functions
+"""
+
 import asyncio
 import logging
 import os
@@ -11,276 +23,254 @@ from dotenv import load_dotenv
 from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
-
 # from langchain_ollama import ChatOllama
+
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import StateGraph, START, END, add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from src.agents.prompts import FOOD_PROMPT, update_prompt
 from src.agents.tools import get_tools
+from src.agents.utils.config import OLLAMA_MODEL, OLLAMA_URL
 
-# Load environment variables from .env file
+# Configuration
 load_dotenv()
-
-# Configure root logger for informational output
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Retrieve external tools for agent
+# Constants
+DB_PATH = os.getenv(
+    "FOOD_AGENT_DB_PATH",
+    os.path.join(os.path.dirname(__file__), "../..", "data", "food_agent.db"),
+)
+
+# Initialize tools and workflow
 tools = get_tools()
 
 class GraphState(TypedDict):
-    """
-    TypedDict defining the agent's conversation state.
-
-    Attributes:
-        messages: List of AnyMessage entries tracking the dialogue history.
-        error: Boolean flag for error state.
-    """
-
+    """State of the graph containing messages and error flag."""
     messages: Annotated[List[AnyMessage], add_messages]
     error: bool
 
-# Instantiate the StateGraph workflow with initial and end markers
+# Create the workflow graph instance
 workflow = StateGraph(GraphState)
 
 
+def _clean_deepseek_response(response: str) -> str:
+    """Remove <think> tags from the model response."""
+    return re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL).strip()
+
+
+# === Workflow node functions ===
 async def extract_input(state: GraphState) -> GraphState:
     """
-    Ensure the conversation begins with a system prompt if none exists.
+    Ensure system control message and initial prompt are prepended before agent call.
 
     Args:
-        state: Current GraphState of the workflow.
+        state: Current GraphState with incoming messages.
 
     Returns:
-        Updated GraphState with system prompt prepended if needed.
+        Updated GraphState with prepended control and prompt messages.
     """
-    # If no messages or missing system prompt, prepend the base prompt
-    if not state.get("messages") or not any(
-        isinstance(m, SystemMessage) for m in state["messages"]
-    ):
-        UPDATED_PROMPT = await update_prompt(FOOD_PROMPT)
-        initial = [SystemMessage(content=UPDATED_PROMPT)]
-        initial.extend(state.get("messages", []))
-        state["messages"] = initial
-
+    messages = state.get("messages", [])
+    if not messages or not any(isinstance(m, SystemMessage) for m in messages):
+        control_msg = SystemMessage(content='{"role": "control", "content": "thinking"}')
+        updated_prompt = await update_prompt(FOOD_PROMPT)
+        state["messages"] = [control_msg, SystemMessage(content=updated_prompt), *messages]
     return state
 
 
 def check_input(state: GraphState) -> str:
     """
-    Determine next workflow node based on last human input.
+    Validate that the last human message is non-empty.
 
     Args:
         state: Current GraphState.
 
     Returns:
-        "send_empty_warning" if input is empty, else "call_Agent".
+        Transition node name based on validation.
     """
-    # Find the most recent human message
-    last_human = next(
+    last_msg = next(
         (m for m in reversed(state.get("messages", [])) if isinstance(m, HumanMessage)),
         None,
     )
-
-    # Route to warning if no content, otherwise proceed
-    if not last_human or not last_human.content.strip():
+    if not last_msg or not last_msg.content.strip():
         return "send_empty_warning"
-    return "call_Agent"
+    return "call_agent"
 
 
 async def send_empty_warning(state: GraphState) -> GraphState:
     """
-    Node: Handle empty input by sending a warning.
+    Return an error state when user input is empty.
 
     Args:
-        state: Workflow state before warning.
+        state: Current GraphState.
 
     Returns:
-        State updated with error flag and warning message.
+        New GraphState with error flag and warning message.
     """
-    state["error"] = True
-    state["messages"] = [SystemMessage(content="⚠️ Please provide a non-empty prompt.")]
-    return state
+    warning = SystemMessage(content="⚠️ Please provide a non-empty prompt.")
+    return {"error": True, "messages": [warning]}
 
 
-def _clean_deepseek_response(response: str) -> str:
+async def call_agent(state: GraphState) -> GraphState:
     """
-    Clean model output by removing <think> blocks and extra whitespace.
+    Invoke the LLM with tools, handling errors and summarizing history if needed.
+
+    Steps:
+      1. Summarize history if messages exceed limit.
+      2. Bind tools to the LLM.
+      3. Invoke LLM and clean response.
+      4. Handle invocation errors gracefully.
 
     Args:
-        response: Raw LLM response string.
+        state: Current GraphState with prepared messages.
 
     Returns:
-        Cleaned string without think tags.
+        New GraphState with LLM result or error flag.
     """
-    # Remove any <think>...</think> sections (including newlines)
-    cleaned = re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL)
-    return cleaned.strip()
-
-
-async def call_Agent(state: GraphState) -> GraphState:
-    """
-    Invoke the language model agent to generate a response.
-
-    - Optionally summarize history if too long.
-    - Handle errors gracefully and log issues.
-
-    Args:
-        state: Current GraphState containing message history.
-
-    Returns:
-        Updated GraphState including the model's reply or error.
-    """
-    # Summarize if history exceeds threshold
-    if len(state.get("messages", [])) > 10:
+    messages = state.get("messages", [])
+    if len(messages) > 10:
         state = await summarize_history(state)
 
-    # Initialize ChatOpenAI (or ChatOllama)
-    llm = ChatOpenAI(model="gpt-4o").bind_tools(tools)
-    # llm = ChatOllama(model=OLLAMA_MODEL, base_url=OLLAMA_URL)
+    llm = ChatOpenAI(model="gpt-4o-mini").bind_tools(tools)
+    # Alternative LLM provider
+    # llm = ChatOllama(model=OLLAMA_MODEL, base_url=OLLAMA_URL).bind_tools(tools)
+
     try:
-        # Send the entire message history
         try:
-            result: AnyMessage = await llm.ainvoke(state["messages"])
+            result = await llm.ainvoke(state["messages"])
         except Exception:
-            result: AnyMessage = await llm.ainvoke(state["messages"])
+            # Retry with 'tool' roles converted to 'function'
+            for msg in state["messages"]:
+                if getattr(msg, "role", None) == "tool":
+                    msg.role = "function"
+            result = await llm.ainvoke(state["messages"])
 
-        # Clean unwanted think tags
         result.content = _clean_deepseek_response(result.content)
-        state["messages"].append(result)
+        return {"messages": [result], "error": False}
     except Exception:
-        # On error, flag and notify user
-        state["error"] = True
         logger.exception("Agent invocation failed")
-        state["messages"].append(
-            SystemMessage(
-                content="⚠️ Agent encountered an error. Please try again later."
-            )
-        )
-
-    return state
+        error_msg = SystemMessage(content="⚠️ Agent encountered an error. Please try again later.")
+        return {"error": True, "messages": [error_msg]}
 
 
 async def summarize_history(state: GraphState) -> GraphState:
     """
-    Condense long dialogue history into a concise summary.
-
-    Steps:
-      1. Format messages into a summarization prompt.
-      2. Call the LLM for summarization.
-      3. Rebuild state with summary and recent context.
+    Summarize long conversation history into bullet points to reduce context size.
 
     Args:
         state: Current GraphState with full history.
 
     Returns:
-        Updated GraphState with shortened history.
+        Updated GraphState with summary and recent messages.
     """
-    # Prepare summarization LLM
-    llm = ChatOpenAI(model="gpt-4o")
-    # llm = ChatOllama(model=OLLAMA_MODEL, base_url=OLLAMA_URL)
+    llm = ChatOpenAI(model="gpt-4o-mini")
 
-    # Build a summary prompt of all messages
-    history_text = "\n\n".join(
-        f"{type(m).__name__}: {m.content}" for m in state["messages"]
-    )
-    summary_prompt = SystemMessage(
-        content=(
-            "You are a helpful assistant that summarizes conversation history into bullet points. "
-            "Here is the dialogue: \n\n" + history_text
-        )
-    )
+    messages = state.get("messages", [])[3:]
 
-    # Invoke summarization
-    summary_msg = await llm.ainvoke([summary_prompt])
+    history = "\n\n".join(f"{type(m).__name__}: {m.content}" for m in messages)
+    prompt = SystemMessage(content=(
+        "You are a helpful assistant that summarizes conversation history into bullet points. "
+        f"Here is the dialogue:\n\n{history}"
+    ))
+    summary_msg = await llm.ainvoke([prompt])
     summary = summary_msg.content.strip()
 
-    # Rebuild message list: system prompt + recent + summary
-    UPDATED_PROMPT = await update_prompt(FOOD_PROMPT)
-    new_messages = [SystemMessage(content=UPDATED_PROMPT)]
-    new_messages.extend(state["messages"][-3:])
-    new_messages.append(SystemMessage(content="Conversation summary:\n" + summary))
-    state["messages"] = new_messages
+    updated_prompt = await update_prompt(FOOD_PROMPT)
+    recent = state["messages"][-3:]
+    state["messages"] = [SystemMessage(content=updated_prompt), *recent, SystemMessage(content=f"Conversation summary:\n{summary}")]
     return state
 
 
 async def send_response(state: GraphState) -> GraphState:
     """
-    Final node: Return the state as-is, completing the workflow.
+    Generate the final response using the full context and updated prompt.
 
     Args:
         state: GraphState after agent invocation.
 
     Returns:
-        Unmodified state (end of workflow).
+        New GraphState with final LLM response or error state.
     """
-    return state
+    last_user = next(
+        (m for m in reversed(state.get("messages", [])) if isinstance(m, HumanMessage)),
+        None,
+    )
+    # Convert any 'tool' role back to 'function'
+    for msg in state.get("messages", []):
+        if getattr(msg, "role", None) == "tool":
+            msg.role = "function"
+
+    context = "\n".join(m.content for m in state["messages"][3:])
+    llm = ChatOpenAI(model="gpt-4o")
+    try:
+        updated_prompt = await update_prompt(FOOD_PROMPT)
+        prompt_text = (
+            f"{updated_prompt}\n\nRespond to the user's query: {last_user.content}\n\n"
+            f"Context:\n{context}"
+        )
+        response = await llm.ainvoke([prompt_text])
+        return {"messages": response, "error": False}
+    except Exception:
+        logger.exception("Failed to send final response")
+        return state
 
 
-# Workflow graph setup: nodes and transitions
-workflow.add_node("extract_input", extract_input)
-workflow.add_node("send_empty_warning", send_empty_warning)
-workflow.add_node("call_Agent", call_Agent)
-workflow.add_node("summarize_history", summarize_history)
-workflow.add_node("send_response", send_response)
-workflow.add_node("search_tools", ToolNode(tools))
+def setup_workflow() -> StateGraph:
+    """
+    Configure nodes and transitions for the Food Agent workflow.
 
-# Start -> extract_input
-workflow.add_edge(START, "extract_input")
+    Returns:
+        Configured StateGraph instance.
+    """
+    workflow.add_node("extract_input", extract_input)
+    workflow.add_node("send_empty_warning", send_empty_warning)
+    workflow.add_node("call_agent", call_agent)
+    workflow.add_node("summarize_history", summarize_history)
+    workflow.add_node("send_response", send_response)
+    workflow.add_node("search_tools", ToolNode(tools))
 
-# Conditional flow: empty input vs. agent call
-workflow.add_conditional_edges(
-    "extract_input",
-    check_input,
-    {"send_empty_warning": "send_empty_warning", "call_Agent": "call_Agent"},
-)
+    workflow.add_edge(START, "extract_input")
+    workflow.add_conditional_edges(
+        "extract_input", check_input,
+        {"send_empty_warning": "send_empty_warning", "call_agent": "call_agent"},
+    )
+    workflow.add_edge("send_empty_warning", END)
+    workflow.add_conditional_edges(
+        "call_agent", tools_condition,
+        {"tools": "search_tools", END: "send_response"},
+    )
+    workflow.add_edge("search_tools", "call_agent")
+    workflow.add_edge("send_response", END)
 
-# Warning -> end
-workflow.add_edge("send_empty_warning", END)
-
-# Agent call -> tool search or response
-workflow.add_conditional_edges(
-    "call_Agent", tools_condition, {"tools": "search_tools", END: "send_response"}
-)
-workflow.add_edge("search_tools", "call_Agent")
-workflow.add_edge("send_response", END)
-
-# Compile the top-level agent
-food_agent = workflow.compile()
-
+    return workflow
 
 async def expose_agent() -> StateGraph:
     """
-    Build an async agent with persistent SQLite memory for integration.
+    Build and return an async agent with persistent SQLite memory.
 
     Returns:
-        Compiled agent ready for async invocations.
+        Compiled StateGraph ready for async invocations.
     """
-    conn = await aiosqlite.connect("data/food_agent.db")
+    conn = await aiosqlite.connect(DB_PATH)
     memory = AsyncSqliteSaver(conn)
-    agent = workflow.compile(checkpointer=memory)
+    agent = setup_workflow().compile(checkpointer=memory)
     return agent
 
 
 def run_agent() -> None:
     """
-    Example entry point for running the agent synchronously.
+    Entry point for synchronous execution of the Food Agent.
 
     - Connects to SQLite database.
     - Compiles workflow with memory.
-    - Invokes agent with a sample message.
+    - Invokes agent with a sample HumanMessage.
     """
-
     async def main():
-        # Database path relative to project root
-        db_path = os.path.join(os.path.dirname(__file__), "../..", "data", "food_agent.db")
-        conn = await aiosqlite.connect(db_path)
+        conn = await aiosqlite.connect(DB_PATH)
         memory = AsyncSqliteSaver(conn)
-        agent = workflow.compile(checkpointer=memory)
-
-        # Example invocation
+        agent = setup_workflow().compile(checkpointer=memory)
         sample = [HumanMessage(content="meal plan for today")]
         result = await agent.ainvoke(
             {"messages": sample, "error": False},
