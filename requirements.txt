@@ -19,3 +19,5 @@ matplotlib
 telegramify_markdown
 telegramify-markdown[mermaid]
 supervisor
+langchain-google-genai
+wikipedia

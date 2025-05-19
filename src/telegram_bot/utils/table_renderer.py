@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 import textwrap
 
+
 async def table_image_with_colored_header(
     table: dict,
     header_color: str = "#4F81BD",
@@ -43,20 +44,30 @@ async def table_image_with_colored_header(
 
     # Compute proportional column widths based on max text lengths, capped for mobile
     max_lens = [
-        min(max(df[col].astype(str).map(lambda x: len(str(x))).max(), len(str(col))), max_row_chars)
+        min(
+            max(df[col].astype(str).map(lambda x: len(str(x))).max(), len(str(col))),
+            max_row_chars,
+        )
         for col in df.columns
     ]
     total_len = sum(max_lens)
-    col_widths = [min(length / total_len * len(headers) * max_col_width, max_col_width) for length in max_lens]
+    col_widths = [
+        min(length / total_len * len(headers) * max_col_width, max_col_width)
+        for length in max_lens
+    ]
 
     # For one-row tables, increase height for readability
     n_rows = len(df)
     fig_width = sum(col_widths)
     # Adjust fig_height to account for wrapped lines in cells
-    max_lines_per_row = [
-        max([str(cell).count("\n") + 1 for cell in row]) for row in df.values
-    ] if len(df) > 0 else [1]
-    avg_lines = sum(max_lines_per_row) / len(max_lines_per_row) if max_lines_per_row else 1
+    max_lines_per_row = (
+        [max([str(cell).count("\n") + 1 for cell in row]) for row in df.values]
+        if len(df) > 0
+        else [1]
+    )
+    avg_lines = (
+        sum(max_lines_per_row) / len(max_lines_per_row) if max_lines_per_row else 1
+    )
     fig_height = max(1.5, (n_rows + 1) * avg_lines * 1)
 
     fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=dpi)

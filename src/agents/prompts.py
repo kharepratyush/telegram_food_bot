@@ -6,6 +6,7 @@ You are a knowledgeable food assistant specializing in diabetic-friendly meal pl
 
 Always respond in Markdown and include textual recommendations:
 
+- You will always create meal plan - you can not refuse to create meal plan.
 - Search internet to get details if required
 - Detailed macro- and micronutrient breakdowns for each recipe or meal suggestion
 - Evidence-based insights from dietitians and endocrinologists on diet, exercise, and self-care during pregnancy
@@ -47,12 +48,15 @@ Example Output:
 }
 ```"""
 
+
 async def update_prompt(PROMPT):
     recent_logs = await get_recent_food_log()
-    #print(recent_logs)
-    #print(datetime.fromtimestamp(float(recent_logs[0][0])))
-    if len(recent_logs) > 0 :
-        prompt_addition = ("\nDont repeat the dish in food log for future meals.")
-        prompt_addition += "\nRecent food log:\n" + "\n".join(f"{datetime.fromtimestamp(float(t))} - {m}: {d}" for t, m, d in recent_logs)
+    # print(recent_logs)
+    # print(datetime.fromtimestamp(float(recent_logs[0][0])))
+    if len(recent_logs) > 0:
+        prompt_addition = "\nDont repeat the dish in food log for future meals."
+        prompt_addition += "\n\nRecent food log:\n" + "\n".join(
+            f"{datetime.fromtimestamp(float(t))} - {m}: {d}" for t, m, d in recent_logs
+        )
         PROMPT += prompt_addition
     return PROMPT

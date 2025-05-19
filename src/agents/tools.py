@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 from langchain_community.tools.tavily_search import TavilySearchResults
 import os, certifi
 from langchain_core.tools import Tool
+from langchain_community.utilities import WikipediaAPIWrapper
+from langchain_community.tools import WikipediaQueryRun
 
 load_dotenv()
 
@@ -48,7 +50,7 @@ def internet_search(query: str) -> str:
     results = search_tool.invoke(query)
 
     # Log the raw results for debugging purposes
-    #print("Raw results:", results)
+    # print("Raw results:", results)
 
     if isinstance(results, list) and all(
         isinstance(result, dict) for result in results
@@ -71,17 +73,30 @@ def internet_search(query: str) -> str:
         )
 
 
-@tool("get_today", return_direct=False)
-def get_today() -> str:
+@tool("get_today_date", return_direct=False)
+def get_today_date() -> str:
     """Provides information about today's date."""
     now = datetime.now()
-    return "Today is "+now.strftime("%Y-%m-%d, %A")
+    return "Today is " + now.strftime("%Y-%m-%d, %A")
 
-@tool("get_tomorrow", return_direct=False)
-def get_tomorrow() -> str:
-    """Provides information about tomorrow's date."""
-    tomorrow = datetime.now() + timedelta(days=1)
-    return "Tomorrow is "+tomorrow.strftime("%Y-%m-%d, %A")
+@tool("get_tomorrow_date", return_direct=False)
+def get_tomorrow_date() -> str:
+    """Provides information about future's date.
+    Args:
+        days_from_current_date (int): Number of days from today. Default is 1 (tomorrow).
+    """
+    tomorrow = datetime.now() + timedelta(days=int(1))
+    return "Tomorrow is " + tomorrow.strftime("%Y-%m-%d, %A")
+
+
+@tool("get_future_date", return_direct=False)
+def get_future_date(days_from_current_date = 1) -> str:
+    """Provides information about future's date.
+    Args:
+        days_from_current_date (int): Number of days from today. Default is 1 (tomorrow).
+    """
+    tomorrow = datetime.now() + timedelta(days=int(days_from_current_date))
+    return "Tomorrow is " + tomorrow.strftime("%Y-%m-%d, %A")
 
 
 def get_tools():
@@ -89,13 +104,18 @@ def get_tools():
         internet_search,
         process_content,
         Tool.from_function(
-            get_today,
-            name="get_today",
+            get_today_date,
+            name="get_today_date",
             description="Provides information about today's date.",
         ),
         Tool.from_function(
-            get_tomorrow,
-            name="get_tomorrow",
+            get_future_date,
+            name="get_future_date",
+            description="Provides information about future's date. Need to provide numbers of days in future as parameter to this function.",
+        ),
+        Tool.from_function(
+            get_tomorrow_date,
+            name="get_tomorrow_date",
             description="Provides information about tomorrow's date.",
         ),
     ]  # Uncomment this and comment the line below to use Tavily instead of DuckDuckGo Search.

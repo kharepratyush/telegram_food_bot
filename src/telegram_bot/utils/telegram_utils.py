@@ -4,6 +4,7 @@ from telegramify_markdown import customize
 customize.strict_markdown = True
 customize.cite_expandable = True
 
+
 async def send_markdown(update, text: str):
     # split into 4000-char chunks
     while text:

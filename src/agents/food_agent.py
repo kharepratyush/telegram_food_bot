@@ -23,6 +23,7 @@ from dotenv import load_dotenv
 from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
+
 # from langchain_ollama import ChatOllama
 
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -32,6 +33,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from src.agents.prompts import FOOD_PROMPT, update_prompt
 from src.agents.tools import get_tools
 from src.agents.utils.config import OLLAMA_MODEL, OLLAMA_URL
+from src.agents.llm import llm_selector
 
 # Configuration
 load_dotenv()
@@ -47,10 +49,13 @@ DB_PATH = os.getenv(
 # Initialize tools and workflow
 tools = get_tools()
 
+
 class GraphState(TypedDict):
     """State of the graph containing messages and error flag."""
+
     messages: Annotated[List[AnyMessage], add_messages]
     error: bool
+
 
 # Create the workflow graph instance
 workflow = StateGraph(GraphState)
@@ -74,9 +79,15 @@ async def extract_input(state: GraphState) -> GraphState:
     """
     messages = state.get("messages", [])
     if not messages or not any(isinstance(m, SystemMessage) for m in messages):
-        control_msg = SystemMessage(content='{"role": "control", "content": "thinking"}')
+        control_msg = SystemMessage(
+            content='{"role": "control", "content": "thinking"}'
+        )
         updated_prompt = await update_prompt(FOOD_PROMPT)
-        state["messages"] = [control_msg, SystemMessage(content=updated_prompt), *messages]
+        state["messages"] = [
+            #control_msg,
+            SystemMessage(content=updated_prompt),
+            *messages,
+        ]
     return state
 
 
@@ -133,13 +144,10 @@ async def call_agent(state: GraphState) -> GraphState:
     if len(messages) > 10:
         state = await summarize_history(state)
 
-    llm = ChatOpenAI(model="gpt-4o-mini").bind_tools(tools)
-    # Alternative LLM provider
-    # llm = ChatOllama(model=OLLAMA_MODEL, base_url=OLLAMA_URL).bind_tools(tools)
-
+    llm = llm_selector().bind_tools(tools)
     try:
         try:
-            result = await llm.ainvoke(state["messages"])
+            result = await llm.ainvoke(state["messages"][::-1])
         except Exception:
             # Retry with 'tool' roles converted to 'function'
             for msg in state["messages"]:
@@ -151,7 +159,9 @@ async def call_agent(state: GraphState) -> GraphState:
         return {"messages": [result], "error": False}
     except Exception:
         logger.exception("Agent invocation failed")
-        error_msg = SystemMessage(content="⚠️ Agent encountered an error. Please try again later.")
+        error_msg = SystemMessage(
+            content="⚠️ Agent encountered an error. Please try again later."
+        )
         return {"error": True, "messages": [error_msg]}
 
 
@@ -165,21 +175,32 @@ async def summarize_history(state: GraphState) -> GraphState:
     Returns:
         Updated GraphState with summary and recent messages.
     """
-    llm = ChatOpenAI(model="gpt-4o-mini")
+    llm = llm_selector()
 
     messages = state.get("messages", [])[3:]
 
-    history = "\n\n".join(f"{type(m).__name__}: {m.content}" for m in messages)
-    prompt = SystemMessage(content=(
-        "You are a helpful assistant that summarizes conversation history into bullet points. "
-        f"Here is the dialogue:\n\n{history}"
-    ))
+    history = "\n\n".join(
+        f"{type(m).__name__}: {getattr(m, 'content', getattr(m, 'text', ''))}" for m in messages
+    )
+
+    if len(history.strip()) == 0:
+        return state
+
+    prompt = SystemMessage(
+            content=(
+                "You are a helpful assistant that summarizes conversation history into bullet points. "
+                f"Here is the dialogue:\n\n{history}"
+            )
+        )
     summary_msg = await llm.ainvoke([prompt])
-    summary = summary_msg.content.strip()
 
     updated_prompt = await update_prompt(FOOD_PROMPT)
     recent = state["messages"][-3:]
-    state["messages"] = [SystemMessage(content=updated_prompt), *recent, SystemMessage(content=f"Conversation summary:\n{summary}")]
+    state["messages"] = [
+        SystemMessage(content=updated_prompt),
+        *recent,
+        SystemMessage(content=f"Conversation summary:\n{summary_msg}"),
+    ]
     return state
 
 
@@ -203,12 +224,12 @@ async def send_response(state: GraphState) -> GraphState:
             msg.role = "function"
 
     context = "\n".join(m.content for m in state["messages"][3:])
-    llm = ChatOpenAI(model="gpt-4o")
+    llm = llm_selector()
     try:
         updated_prompt = await update_prompt(FOOD_PROMPT)
         prompt_text = (
             f"{updated_prompt}\n\nRespond to the user's query: {last_user.content}\n\n"
-            f"Context:\n{context}"
+            f"Please use historical Context if required:\n\n{context}"
         )
         response = await llm.ainvoke([prompt_text])
         return {"messages": response, "error": False}
@@ -233,18 +254,21 @@ def setup_workflow() -> StateGraph:
 
     workflow.add_edge(START, "extract_input")
     workflow.add_conditional_edges(
-        "extract_input", check_input,
+        "extract_input",
+        check_input,
         {"send_empty_warning": "send_empty_warning", "call_agent": "call_agent"},
     )
     workflow.add_edge("send_empty_warning", END)
     workflow.add_conditional_edges(
-        "call_agent", tools_condition,
+        "call_agent",
+        tools_condition,
         {"tools": "search_tools", END: "send_response"},
     )
     workflow.add_edge("search_tools", "call_agent")
     workflow.add_edge("send_response", END)
 
     return workflow
+
 
 async def expose_agent() -> StateGraph:
     """
@@ -267,11 +291,12 @@ def run_agent() -> None:
     - Compiles workflow with memory.
     - Invokes agent with a sample HumanMessage.
     """
+
     async def main():
         conn = await aiosqlite.connect(DB_PATH)
         memory = AsyncSqliteSaver(conn)
         agent = setup_workflow().compile(checkpointer=memory)
-        sample = [HumanMessage(content="meal plan for thursday")]
+        sample = [HumanMessage(content="meal plan for tomorrow")]
         result = await agent.ainvoke(
             {"messages": sample, "error": False},
             config=RunnableConfig({"thread_id": uuid.uuid4()}),

@@ -1,5 +1,3 @@
-
-
 def help_command(update, context):
     commands = [
         "/start - Start the bot",
