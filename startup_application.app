@@ -1,0 +1,1 @@
+"/Users/pratyush.khare/My Projects/telegram_bots/.venv/bin/supervisord" -c "/Users/pratyush.khare/My Projects/telegram_bots/supervisord.conf"

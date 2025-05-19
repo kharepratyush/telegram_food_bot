@@ -18,3 +18,4 @@ pandas
 matplotlib
 telegramify_markdown
 telegramify-markdown[mermaid]
+supervisor
