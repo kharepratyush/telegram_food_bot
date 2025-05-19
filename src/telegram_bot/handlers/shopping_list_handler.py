@@ -1,6 +1,6 @@
 from telegram import Update
 from telegram.ext import ContextTypes
-from src.telegram_bot.utils.db import init_db, insert, fetch_all
+from src.telegram_bot.utils.db import init_db, insert, fetch_all, execute_sql
 from src.telegram_bot.utils.telegram_utils import send_markdown
 
 SHOP_TABLE_SQL = (
@@ -46,5 +46,5 @@ async def delete_shopping_list(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     await init_db("shopping_list.db", SHOP_TABLE_SQL)
-    await insert("shopping_list.db", "DELETE FROM shopping_list", ())
+    await execute_sql("shopping_list.db", "DELETE FROM shopping_list", ())
     await update.message.reply_text("Shopping list deleted.")

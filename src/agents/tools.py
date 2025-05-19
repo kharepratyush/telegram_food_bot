@@ -20,10 +20,6 @@ os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 import requests
 
-requests.packages.urllib3.disable_warnings()
-session = requests.Session()
-session.verify = False
-
 
 @tool("internet_search_DDGO", return_direct=False)
 def internet_search_DDGO(query: str) -> str:
@@ -82,22 +78,25 @@ def get_today_date() -> str:
 
 @tool("get_tomorrow_date", return_direct=False)
 def get_tomorrow_date() -> str:
-    """Provides information about future's date.
-    Args:
-        days_from_current_date (int): Number of days from today. Default is 1 (tomorrow).
-    """
-    tomorrow = datetime.now() + timedelta(days=int(1))
+    """Provides information about tomorrow's date."""
+    tomorrow = datetime.now() + timedelta(days=1)
     return "Tomorrow is " + tomorrow.strftime("%Y-%m-%d, %A")
 
 
 @tool("get_future_date", return_direct=False)
-def get_future_date(days_from_current_date=1) -> str:
-    """Provides information about future's date.
+def get_future_date(days_from_current_date: int = 1) -> str:
+    """Provides information about a future date.
+
     Args:
-        days_from_current_date (int): Number of days from today. Default is 1 (tomorrow).
+        days_from_current_date (int): Number of days from today.
     """
-    tomorrow = datetime.now() + timedelta(days=int(days_from_current_date))
-    return "Tomorrow is " + tomorrow.strftime("%Y-%m-%d, %A")
+    offset = int(days_from_current_date)
+    future_date = datetime.now() + timedelta(days=offset)
+    if offset == 1:
+        prefix = "Tomorrow is "
+    else:
+        prefix = f"In {offset} days it will be "
+    return prefix + future_date.strftime("%Y-%m-%d, %A")
 
 
 def get_tools():
@@ -112,7 +111,7 @@ def get_tools():
         Tool.from_function(
             get_future_date,
             name="get_future_date",
-            description="Provides information about future's date. Need to provide numbers of days in future as parameter to this function.",
+            description="Provides information about a future date given a number of days from today.",
         ),
         Tool.from_function(
             get_tomorrow_date,
