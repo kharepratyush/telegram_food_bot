@@ -141,7 +141,7 @@ async def call_agent(state: GraphState) -> GraphState:
         New GraphState with LLM result or error flag.
     """
     messages = state.get("messages", [])
-    if len(messages) > 10:
+    if len(messages) > 20:
         state = await summarize_history(state)
 
     llm = llm_selector().bind_tools(tools)
