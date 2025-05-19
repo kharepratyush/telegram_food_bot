@@ -271,7 +271,7 @@ def run_agent() -> None:
         conn = await aiosqlite.connect(DB_PATH)
         memory = AsyncSqliteSaver(conn)
         agent = setup_workflow().compile(checkpointer=memory)
-        sample = [HumanMessage(content="meal plan for today")]
+        sample = [HumanMessage(content="meal plan for thursday")]
         result = await agent.ainvoke(
             {"messages": sample, "error": False},
             config=RunnableConfig({"thread_id": uuid.uuid4()}),

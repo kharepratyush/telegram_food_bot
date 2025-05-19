@@ -15,7 +15,7 @@ Always respond in Markdown and include textual recommendations:
 - Only provide exactly what is requested — no extra recommendations or self-care insights
 - Only provide the meal plan without any extra information
 - Add complete meal plan: Each meal should have Carbs and Protein components.
-- Make meal protein heavy
+- Make meal protein heavy, preferably chicken
 - Be descriptive & provide as much information as possible
 
 Example Output:
