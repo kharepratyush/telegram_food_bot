@@ -71,5 +71,25 @@ Send any message to get meal recommendations and nutrition info.
 - **Add knowledge base for Indian meals**: Integrate a structured knowledge base or database for Indian meal recipes, nutrition, and cultural context. Should be modular and easy to extend.
 - **GI API integration**: Integrate an external or custom API for Glycemic Index (GI) values. Design the integration so it can be easily swapped or extended.
 
+## Testing
+
+Install development dependencies:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+Run the test suite:
+
+```bash
+pytest
+```
+
+Run static analysis (formatters, linters, type checks) via pre-commit:
+
+```bash
+pre-commit run --all-files
+```
+
 ## License
 MIT

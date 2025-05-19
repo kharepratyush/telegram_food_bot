@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta
+from typing import Any
+
 import requests
 from langchain.tools import tool
 from duckduckgo_search import DDGS
@@ -22,7 +24,7 @@ import requests
 
 
 @tool("internet_search_DDGO", return_direct=False)
-def internet_search_DDGO(query: str) -> str:
+def internet_search_DDGO(query: str) -> list[Any] | str:
     """Searches the internet using DuckDuckGo."""
 
     with DDGS() as ddgs:
