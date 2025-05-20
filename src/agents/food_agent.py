@@ -16,13 +16,17 @@ import os
 import pprint
 import re
 import uuid
-from typing import Annotated, List, TypedDict
+from typing import Annotated, List, TypedDict, Optional
+from langgraph.types import Command
 
 import aiosqlite
 from dotenv import load_dotenv
 from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
+from langmem.short_term import SummarizationNode
+from langchain_core.messages.utils import count_tokens_approximately
+from langchain_core.messages import RemoveMessage
 
 # from langchain_ollama import ChatOllama
 
@@ -34,6 +38,7 @@ from src.agents.prompts import FOOD_PROMPT, update_prompt
 from src.agents.tools import get_tools
 from src.agents.utils.config import OLLAMA_MODEL, OLLAMA_URL
 from src.agents.llm import llm_selector
+from langchain_core.messages.utils import trim_messages, count_tokens_approximately
 
 # Configuration
 load_dotenv()
@@ -54,11 +59,9 @@ class GraphState(TypedDict):
     """State of the graph containing messages and error flag."""
 
     messages: Annotated[List[AnyMessage], add_messages]
-    error: bool
-
-
-# Create the workflow graph instance
-workflow = StateGraph(GraphState)
+    error: Optional[bool]
+    human_query: Optional[str]
+    interim_response: Optional[str]
 
 
 def _clean_deepseek_response(response: str) -> str:
@@ -77,18 +80,19 @@ async def extract_input(state: GraphState) -> GraphState:
     Returns:
         Updated GraphState with prepended control and prompt messages.
     """
-    messages = state.get("messages", [])
-    if not messages or not any(isinstance(m, SystemMessage) for m in messages):
-        control_msg = SystemMessage(
-            content='{"role": "control", "content": "thinking"}'
-        )
-        updated_prompt = await update_prompt(FOOD_PROMPT)
-        state["messages"] = [
-            # control_msg,
-            SystemMessage(content=updated_prompt),
-            *messages,
-        ]
-    return state
+    #print("-" * 50)
+    #print("extract_input")
+    #print(state)
+    #print("-" * 50)
+
+    last_user = next(
+        (m for m in reversed(state.get("messages", [])) if isinstance(m, HumanMessage)),
+        None,
+    )
+    human_query = last_user.content
+    updated_prompt = await update_prompt(FOOD_PROMPT)
+    messages = [SystemMessage(content=updated_prompt)]
+    return {"messages": messages, "human_query": human_query}
 
 
 def check_input(state: GraphState) -> str:
@@ -101,12 +105,16 @@ def check_input(state: GraphState) -> str:
     Returns:
         Transition node name based on validation.
     """
-    last_msg = next(
-        (m for m in reversed(state.get("messages", [])) if isinstance(m, HumanMessage)),
-        None,
-    )
-    if not last_msg or not last_msg.content.strip():
+    #print("-" * 50)
+    #print("check_input")
+    #print(state)
+    #print("-" * 50)
+
+    human_query = state.get("human_query", "")
+    if not human_query or not human_query.strip():
         return "send_empty_warning"
+    if len(state.get("messages", [])) > 1:
+        return "summarize_history"
     return "call_agent"
 
 
@@ -140,23 +148,39 @@ async def call_agent(state: GraphState) -> GraphState:
     Returns:
         New GraphState with LLM result or error flag.
     """
-    messages = state.get("messages", [])
-    if len(messages) > 20:
-        state = await summarize_history(state)
+    #print("-" * 50)
+    #print("call_agent")
+    #print(state)
+    #print("Message Length", len(state.get("messages", [])))
+    #print("-" * 50)
 
     llm = llm_selector().bind_tools(tools)
     try:
         try:
-            result = await llm.ainvoke(state["messages"][::-1])
+            prompt_text = (
+                f"Only respond to the user's query: {state['human_query']}\n\n"
+                f"Use Context only if required: \n{state["messages"]}\n\n"
+            )
+            result = await llm.ainvoke(prompt_text)
+
         except Exception:
             # Retry with 'tool' roles converted to 'function'
             for msg in state["messages"]:
                 if getattr(msg, "role", None) == "tool":
                     msg.role = "function"
-            result = await llm.ainvoke(state["messages"])
+
+            prompt_text = (
+                f"Only respond to the user's query: {state['human_query']}\n\n"
+                f"Use Context only if required: \n{state["messages"]}\n\n"
+            )
+            result = await llm.ainvoke(prompt_text)
 
         result.content = _clean_deepseek_response(result.content)
-        return {"messages": [result], "error": False}
+        return {
+            "messages": [result],
+            "error": False,
+            "interim_response": result.content,
+        }
     except Exception:
         logger.exception("Agent invocation failed")
         error_msg = SystemMessage(
@@ -175,9 +199,14 @@ async def summarize_history(state: GraphState) -> GraphState:
     Returns:
         Updated GraphState with summary and recent messages.
     """
-    llm = llm_selector()
+    #print("-" * 50)
+    #print("call_agent")
+    #print(state)
+    #print("Message Length", len(state.get("messages", [])))
+    #print("-" * 50)
 
-    messages = state.get("messages", [])[3:]
+    llm = llm_selector()
+    messages = state.get("messages", [])
 
     history = "\n\n".join(
         f"{type(m).__name__}: {getattr(m, 'content', getattr(m, 'text', ''))}"
@@ -195,14 +224,15 @@ async def summarize_history(state: GraphState) -> GraphState:
     )
     summary_msg = await llm.ainvoke([prompt])
 
-    updated_prompt = await update_prompt(FOOD_PROMPT)
-    recent = state["messages"][-3:]
-    state["messages"] = [
-        SystemMessage(content=updated_prompt),
-        *recent,
-        SystemMessage(content=f"Conversation summary:\n{summary_msg}"),
+    to_delete_messages = [RemoveMessage(id=m.id) for m in state["messages"]]
+    to_add_messages = [
+        SystemMessage(content=f"Conversation summary:\n\n{summary_msg.content}"),
     ]
-    return state
+
+    summary_messages = to_delete_messages.copy()
+    summary_messages.extend(to_add_messages)
+
+    return {"messages": summary_messages}
 
 
 async def send_response(state: GraphState) -> GraphState:
@@ -215,22 +245,19 @@ async def send_response(state: GraphState) -> GraphState:
     Returns:
         New GraphState with final LLM response or error state.
     """
-    last_user = next(
-        (m for m in reversed(state.get("messages", [])) if isinstance(m, HumanMessage)),
-        None,
-    )
     # Convert any 'tool' role back to 'function'
     for msg in state.get("messages", []):
         if getattr(msg, "role", None) == "tool":
             msg.role = "function"
 
-    context = "\n".join(m.content for m in state["messages"][3:])
-    llm = llm_selector()
+    intermediate_response = state["interim_response"]
+    llm = llm_selector('gpt-4o')
     try:
         updated_prompt = await update_prompt(FOOD_PROMPT)
         prompt_text = (
-            f"{updated_prompt}\n\nRespond to the user's query: {last_user.content}\n\n"
-            f"Please use historical Context if required:\n\n{context}"
+            f"Only respond to the user's query: {state['human_query']}\n\n"
+            f"Use Context only if required: \n{updated_prompt}\n\n"
+            f"Please use intermediate response only if required:\n{intermediate_response}"
         )
         response = await llm.ainvoke([prompt_text])
         return {"messages": response, "error": False}
@@ -246,6 +273,8 @@ def setup_workflow() -> StateGraph:
     Returns:
         Configured StateGraph instance.
     """
+    # Create the workflow graph instance
+    workflow = StateGraph(GraphState)
     workflow.add_node("extract_input", extract_input)
     workflow.add_node("send_empty_warning", send_empty_warning)
     workflow.add_node("call_agent", call_agent)
@@ -254,11 +283,17 @@ def setup_workflow() -> StateGraph:
     workflow.add_node("search_tools", ToolNode(tools))
 
     workflow.add_edge(START, "extract_input")
+
     workflow.add_conditional_edges(
         "extract_input",
         check_input,
-        {"send_empty_warning": "send_empty_warning", "call_agent": "call_agent"},
+        {
+            "send_empty_warning": "send_empty_warning",
+            "call_agent": "call_agent",
+            "summarize_history": "summarize_history",
+        },
     )
+
     workflow.add_edge("send_empty_warning", END)
     workflow.add_conditional_edges(
         "call_agent",
@@ -266,9 +301,13 @@ def setup_workflow() -> StateGraph:
         {"tools": "search_tools", END: "send_response"},
     )
     workflow.add_edge("search_tools", "call_agent")
+    workflow.add_edge("summarize_history", "call_agent")
     workflow.add_edge("send_response", END)
 
     return workflow
+
+
+food_agent = setup_workflow().compile()
 
 
 async def expose_agent() -> StateGraph:
@@ -280,8 +319,8 @@ async def expose_agent() -> StateGraph:
     """
     conn = await aiosqlite.connect(DB_PATH)
     memory = AsyncSqliteSaver(conn)
-    agent = setup_workflow().compile(checkpointer=memory)
-    return agent
+    food_agent = setup_workflow().compile(checkpointer=memory)
+    return food_agent
 
 
 def run_agent() -> None:
@@ -302,7 +341,7 @@ def run_agent() -> None:
             {"messages": sample, "error": False},
             config=RunnableConfig({"thread_id": uuid.uuid4()}),
         )
-        pprint.pprint(result)
+        print(result)
 
     asyncio.run(main())
 

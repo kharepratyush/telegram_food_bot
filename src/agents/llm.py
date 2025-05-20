@@ -6,7 +6,7 @@ from src.agents.utils.config import OLLAMA_MODEL, OLLAMA_URL
 from src.agents.utils.config import OPENAI_MODEL, GOOGLE_MODEL
 
 
-def llm_selector():
+def llm_selector(openai_model=None):
     if LLM == "google-gemini":
         llm = ChatGoogleGenerativeAI(
             model=GOOGLE_MODEL,
@@ -28,7 +28,7 @@ def llm_selector():
 
     elif LLM == "openai":
         llm = ChatOpenAI(
-            model=OPENAI_MODEL,
+            model=openai_model if openai_model else OPENAI_MODEL,
             temperature=0,
             max_tokens=None,
             timeout=None,

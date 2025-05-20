@@ -7,6 +7,7 @@ pytest.importorskip("langchain_openai")
 pytest.importorskip("langchain_google_genai")
 pytest.importorskip("langchain_ollama")
 
+
 @pytest.fixture(autouse=True)
 def clear_env(monkeypatch):
     for key in ["LLM", "GOOGLE_MODEL", "OPENAI_MODEL", "OLLAMA_MODEL", "OLLAMA_URL"]:

@@ -1,4 +1,5 @@
 import pytest
+
 # skip if aiosqlite not available
 pytest.importorskip("aiosqlite")
 from datetime import datetime

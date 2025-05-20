@@ -1,4 +1,5 @@
 import pytest
+
 # skip if telegramify_markdown not available
 pytest.importorskip("telegramify_markdown")
 
@@ -26,7 +27,7 @@ def test_split_json_response_no_block():
 
 
 def test_split_json_response_with_block():
-    text = "Some narrative\n```json\n{\"a\":1}\n```"
+    text = 'Some narrative\n```json\n{"a":1}\n```'
     narrative, json_text = telegram_utils.split_json_response(text)
     assert narrative == "Some narrative"
     assert json_text == '{"a":1}'

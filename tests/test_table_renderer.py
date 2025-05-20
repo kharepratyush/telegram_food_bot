@@ -1,9 +1,11 @@
 import pytest
+
 # skip if pandas or matplotlib not available
 pytest.importorskip("pandas")
 pytest.importorskip("matplotlib")
 
 import matplotlib
+
 matplotlib.use("Agg")
 from io import BytesIO
 from src.telegram_bot.utils.table_renderer import table_image_with_colored_header

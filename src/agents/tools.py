@@ -10,8 +10,6 @@ from dotenv import load_dotenv
 from langchain_community.tools.tavily_search import TavilySearchResults
 import os, certifi
 from langchain_core.tools import Tool
-from langchain_community.utilities import WikipediaAPIWrapper
-from langchain_community.tools import WikipediaQueryRun
 
 load_dotenv()
 
