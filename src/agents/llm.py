@@ -1,9 +1,14 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
-from src.agents.utils.config import LLM
-from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
-from src.agents.utils.config import OLLAMA_MODEL, OLLAMA_URL
-from src.agents.utils.config import OPENAI_MODEL, GOOGLE_MODEL
+from langchain_openai import ChatOpenAI
+
+from src.agents.utils.config import (
+    GOOGLE_MODEL,
+    LLM,
+    OLLAMA_MODEL,
+    OLLAMA_URL,
+    OPENAI_MODEL,
+)
 
 
 def llm_selector(openai_model=None):

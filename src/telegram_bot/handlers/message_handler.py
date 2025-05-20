@@ -1,11 +1,12 @@
-from telegram import Update
-from telegram.ext import ContextTypes
 import json
 import logging
 
-from src.telegram_bot.utils.telegram_utils import send_markdown, split_json_response
-from src.telegram_bot.utils.table_renderer import table_image_with_colored_header
+from telegram import Update
+from telegram.ext import ContextTypes
+
 from src.agents.food_agent import expose_agent
+from src.telegram_bot.utils.table_renderer import table_image_with_colored_header
+from src.telegram_bot.utils.telegram_utils import send_markdown, split_json_response
 
 logger = logging.getLogger(__name__)
 

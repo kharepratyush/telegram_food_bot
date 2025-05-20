@@ -1,6 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
-from src.telegram_bot.utils.db import init_db, insert, fetch_all, execute_sql
+
+from src.telegram_bot.utils.db import execute_sql, fetch_all, init_db, insert
 from src.telegram_bot.utils.telegram_utils import send_markdown
 
 SHOP_TABLE_SQL = (

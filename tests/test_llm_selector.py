@@ -1,5 +1,5 @@
 import importlib
-import os
+
 import pytest
 
 # skip if required LLM libraries not available

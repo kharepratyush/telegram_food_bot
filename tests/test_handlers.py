@@ -5,13 +5,14 @@ pytest.importorskip("telegram")
 pytest.importorskip("aiosqlite")
 
 from types import SimpleNamespace
+
+from src.telegram_bot.handlers.help_handler import help_command
 from src.telegram_bot.handlers.save_handler import save
 from src.telegram_bot.handlers.shopping_list_handler import (
     add_to_shopping_list,
-    retrieve_shopping_list,
     delete_shopping_list,
+    retrieve_shopping_list,
 )
-from src.telegram_bot.handlers.help_handler import help_command
 from src.telegram_bot.handlers.start_handler import start
 
 

@@ -13,32 +13,29 @@ It includes:
 import asyncio
 import logging
 import os
-import pprint
 import re
 import uuid
-from typing import Annotated, List, TypedDict, Optional
-from langgraph.types import Command
+from typing import Annotated, List, Optional, TypedDict
 
 import aiosqlite
 from dotenv import load_dotenv
-from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AnyMessage,
+    HumanMessage,
+    RemoveMessage,
+    SystemMessage,
+)
 from langchain_core.runnables import RunnableConfig
-from langchain_openai import ChatOpenAI
-from langmem.short_term import SummarizationNode
-from langchain_core.messages.utils import count_tokens_approximately
-from langchain_core.messages import RemoveMessage
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from langgraph.graph import END, START, StateGraph, add_messages
+from langgraph.prebuilt import ToolNode, tools_condition
+
+from src.agents.llm import llm_selector
+from src.agents.prompts import FOOD_PROMPT, update_prompt
+from src.agents.tools import get_tools
 
 # from langchain_ollama import ChatOllama
 
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-from langgraph.graph import StateGraph, START, END, add_messages
-from langgraph.prebuilt import ToolNode, tools_condition
-
-from src.agents.prompts import FOOD_PROMPT, update_prompt
-from src.agents.tools import get_tools
-from src.agents.utils.config import OLLAMA_MODEL, OLLAMA_URL
-from src.agents.llm import llm_selector
-from langchain_core.messages.utils import trim_messages, count_tokens_approximately
 
 # Configuration
 load_dotenv()
@@ -80,10 +77,10 @@ async def extract_input(state: GraphState) -> GraphState:
     Returns:
         Updated GraphState with prepended control and prompt messages.
     """
-    #print("-" * 50)
-    #print("extract_input")
-    #print(state)
-    #print("-" * 50)
+    # print("-" * 50)
+    # print("extract_input")
+    # print(state)
+    # print("-" * 50)
 
     last_user = next(
         (m for m in reversed(state.get("messages", [])) if isinstance(m, HumanMessage)),
@@ -105,10 +102,10 @@ def check_input(state: GraphState) -> str:
     Returns:
         Transition node name based on validation.
     """
-    #print("-" * 50)
-    #print("check_input")
-    #print(state)
-    #print("-" * 50)
+    # print("-" * 50)
+    # print("check_input")
+    # print(state)
+    # print("-" * 50)
 
     human_query = state.get("human_query", "")
     if not human_query or not human_query.strip():
@@ -148,11 +145,11 @@ async def call_agent(state: GraphState) -> GraphState:
     Returns:
         New GraphState with LLM result or error flag.
     """
-    #print("-" * 50)
-    #print("call_agent")
-    #print(state)
-    #print("Message Length", len(state.get("messages", [])))
-    #print("-" * 50)
+    # print("-" * 50)
+    # print("call_agent")
+    # print(state)
+    # print("Message Length", len(state.get("messages", [])))
+    # print("-" * 50)
 
     llm = llm_selector().bind_tools(tools)
     try:
@@ -199,11 +196,11 @@ async def summarize_history(state: GraphState) -> GraphState:
     Returns:
         Updated GraphState with summary and recent messages.
     """
-    #print("-" * 50)
-    #print("call_agent")
-    #print(state)
-    #print("Message Length", len(state.get("messages", [])))
-    #print("-" * 50)
+    # print("-" * 50)
+    # print("call_agent")
+    # print(state)
+    # print("Message Length", len(state.get("messages", [])))
+    # print("-" * 50)
 
     llm = llm_selector()
     messages = state.get("messages", [])
@@ -251,7 +248,7 @@ async def send_response(state: GraphState) -> GraphState:
             msg.role = "function"
 
     intermediate_response = state["interim_response"]
-    llm = llm_selector('gpt-4o')
+    llm = llm_selector("gpt-4o")
     try:
         updated_prompt = await update_prompt(FOOD_PROMPT)
         prompt_text = (

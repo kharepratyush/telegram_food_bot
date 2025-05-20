@@ -1,4 +1,5 @@
 from datetime import datetime
+
 from src.agents.utils.db import get_recent_food_log
 
 FOOD_PROMPT = """

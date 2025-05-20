@@ -3,7 +3,6 @@ import pytest
 # skip if telegramify_markdown not available
 pytest.importorskip("telegramify_markdown")
 
-from types import SimpleNamespace
 from src.telegram_bot.utils import telegram_utils
 
 

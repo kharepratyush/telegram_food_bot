@@ -1,5 +1,7 @@
 import os
+
 import aiosqlite
+
 from src.telegram_bot.config import DATABASE_DIR
 
 _initialized_dbs = set()

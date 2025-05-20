@@ -3,7 +3,6 @@ import pytest
 # skip if aiosqlite not available
 pytest.importorskip("aiosqlite")
 
-import os
 from src.telegram_bot.utils import db as db_utils
 
 

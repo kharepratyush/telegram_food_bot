@@ -1,14 +1,14 @@
+import os
 from datetime import datetime, timedelta
 from typing import Any
 
+import certifi
 import requests
-from langchain.tools import tool
-from duckduckgo_search import DDGS
 from bs4 import BeautifulSoup
-import os
 from dotenv import load_dotenv
+from duckduckgo_search import DDGS
+from langchain.tools import tool
 from langchain_community.tools.tavily_search import TavilySearchResults
-import os, certifi
 from langchain_core.tools import Tool
 
 load_dotenv()

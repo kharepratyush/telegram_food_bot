@@ -1,7 +1,8 @@
-import pandas as pd
-import matplotlib.pyplot as plt
-from io import BytesIO
 import textwrap
+from io import BytesIO
+
+import matplotlib.pyplot as plt
+import pandas as pd
 
 
 async def table_image_with_colored_header(

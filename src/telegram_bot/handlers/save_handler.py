@@ -1,5 +1,6 @@
 from telegram import Update
 from telegram.ext import ContextTypes
+
 from src.telegram_bot.utils.db import init_db, insert
 
 SAVE_TABLE_SQL = (

@@ -2,7 +2,7 @@ import pytest
 
 # skip if agents.tools dependencies are not available
 try:
-    import src.agents.tools
+    pass
 except ImportError:
     pytest.skip(
         "Skipping agents.tools tests due to missing dependencies",
@@ -10,7 +10,8 @@ except ImportError:
     )
 
 import re
-from src.agents.tools import get_today_date, get_tomorrow_date, get_future_date
+
+from src.agents.tools import get_future_date, get_today_date, get_tomorrow_date
 
 
 def test_get_today_date_format():
