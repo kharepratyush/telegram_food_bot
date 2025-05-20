@@ -152,11 +152,17 @@ async def call_agent(state: GraphState) -> GraphState:
     # print("-" * 50)
 
     llm = llm_selector().bind_tools(tools)
+
+    updated_prompt = await update_prompt(FOOD_PROMPT)
+    messages = [SystemMessage(content=updated_prompt)]
+    messages.extend(state["messages"])
+    context = "\n".join([m.content.strip() for m in messages])
+
     try:
         try:
             prompt_text = (
                 f"Only respond to the user's query: {state['human_query']}\n\n"
-                f"Use Context only if required: \n{state["messages"]}\n\n"
+                f"Use Context only if required: \n{context}\n\n"
             )
             result = await llm.ainvoke(prompt_text)
 
@@ -168,7 +174,7 @@ async def call_agent(state: GraphState) -> GraphState:
 
             prompt_text = (
                 f"Only respond to the user's query: {state['human_query']}\n\n"
-                f"Use Context only if required: \n{state["messages"]}\n\n"
+                f"Use Context only if required: \n{context}\n\n"
             )
             result = await llm.ainvoke(prompt_text)
 
@@ -243,24 +249,25 @@ async def send_response(state: GraphState) -> GraphState:
         New GraphState with final LLM response or error state.
     """
     # Convert any 'tool' role back to 'function'
-    for msg in state.get("messages", []):
-        if getattr(msg, "role", None) == "tool":
-            msg.role = "function"
-
-    intermediate_response = state["interim_response"]
-    llm = llm_selector("gpt-4o")
-    try:
-        updated_prompt = await update_prompt(FOOD_PROMPT)
-        prompt_text = (
-            f"Only respond to the user's query: {state['human_query']}\n\n"
-            f"Use Context only if required: \n{updated_prompt}\n\n"
-            f"Please use intermediate response only if required:\n{intermediate_response}"
-        )
-        response = await llm.ainvoke([prompt_text])
-        return {"messages": response, "error": False}
-    except Exception:
-        logger.exception("Failed to send final response")
-        return state
+    # for msg in state.get("messages", []):
+    #     if getattr(msg, "role", None) == "tool":
+    #         msg.role = "function"
+    #
+    # intermediate_response = state["interim_response"]
+    # llm = llm_selector(openai_model="gpt-4o")
+    # try:
+    #     updated_prompt = await update_prompt(FOOD_PROMPT)
+    #     prompt_text = (
+    #         f"Only respond to the user's query: {state['human_query']}\n\n"
+    #         f"Use Context only if required: \n{updated_prompt}\n\n"
+    #         f"Please use intermediate response only if required:\n{intermediate_response}"
+    #     )
+    #     response = await llm.ainvoke([prompt_text])
+    #     return {"messages": response, "error": False}
+    # except Exception:
+    #     logger.exception("Failed to send final response")
+    #     return state
+    pass
 
 
 def setup_workflow() -> StateGraph:
