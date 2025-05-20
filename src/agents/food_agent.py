@@ -156,27 +156,13 @@ async def call_agent(state: GraphState) -> GraphState:
     updated_prompt = await update_prompt(FOOD_PROMPT)
     messages = [SystemMessage(content=updated_prompt)]
     messages.extend(state["messages"])
-    context = "\n".join([m.content.strip() for m in messages])
 
     try:
-        try:
-            prompt_text = (
-                f"Only respond to the user's query: {state['human_query']}\n\n"
-                f"Use Context only if required: \n{context}\n\n"
-            )
-            result = await llm.ainvoke(prompt_text)
-
-        except Exception:
-            # Retry with 'tool' roles converted to 'function'
-            for msg in state["messages"]:
-                if getattr(msg, "role", None) == "tool":
-                    msg.role = "function"
-
-            prompt_text = (
-                f"Only respond to the user's query: {state['human_query']}\n\n"
-                f"Use Context only if required: \n{context}\n\n"
-            )
-            result = await llm.ainvoke(prompt_text)
+        prompt_text = (
+            f"Only respond to the user's query: {state['human_query']}\n\n"
+            f"Use Context only if required: \n\n{messages}\n\n"
+        )
+        result = await llm.ainvoke(prompt_text)
 
         result.content = _clean_deepseek_response(result.content)
         return {
