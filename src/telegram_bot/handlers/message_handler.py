@@ -3,6 +3,7 @@ import logging
 
 from telegram import Update
 from telegram.ext import ContextTypes
+from langchain_core.messages import HumanMessage
 
 from src.agents.food_agent import expose_agent
 from src.telegram_bot.utils.table_renderer import table_image_with_colored_header
@@ -20,7 +21,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     try:
         agent = await expose_agent()
         response = await agent.ainvoke(
-            {"messages": user_input, "error": False},
+            {"messages": [HumanMessage(content=user_input)], "error": False},
             config={"thread_id": update.message.chat.id},
         )
         data = response["messages"][-1].content or "🤖 (empty response)"
