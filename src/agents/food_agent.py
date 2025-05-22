@@ -18,8 +18,8 @@ import logging
 import os
 import re
 import uuid
-import json # Added
-from typing import Annotated, List, Optional, TypedDict, Dict # Added Dict
+import json  # Added
+from typing import Annotated, List, Optional, TypedDict, Dict  # Added Dict
 
 import aiosqlite
 from dotenv import load_dotenv
@@ -70,8 +70,8 @@ class GraphState(TypedDict):
     error: Optional[bool]
     human_query: Optional[str]
     interim_response: Optional[str]
-    tool_call_loop_tracker: Optional[Dict[str, int]] = None # Added
-    initiating_human_query: Optional[str] = None # Added
+    tool_call_loop_tracker: Optional[Dict[str, int]] = None  # Added
+    initiating_human_query: Optional[str] = None  # Added
 
 
 def _clean_deepseek_response(response: str) -> str:
@@ -142,7 +142,7 @@ def check_input(state: GraphState) -> str:
     # The 'messages' in the state at this point should primarily be the
     # system prompt from `extract_input`. If more messages are present,
     # it implies a longer history carried over, possibly needing summarization.
-    # Note: The definition of "long history" (len > 1) is simple here.
+    # Note: The definition of "long history" (len > 10) is simple here.
     # `extract_input` resets messages to just [SystemMessage].
     # This condition seems to rely on how messages are passed *into* the graph initially
     # or if state from previous turns (not nodes) is re-injected.
@@ -152,7 +152,9 @@ def check_input(state: GraphState) -> str:
     # if it's meant to check conversation history length *before* `extract_input`.
     # However, if `add_messages` in GraphState appends to existing messages from
     # the input to `ainvoke`, then this check is for the total history.
-    if len(state.get("messages", [])) > 1: # This checks messages *after* extract_input
+    if (
+        len(state.get("messages", [])) > 10
+    ):  # This checks messages *after* extract_input
         return "summarize_history"
     return "call_agent"
 
@@ -190,15 +192,17 @@ async def call_agent(state: GraphState) -> GraphState:
     # Define maximum attempts for a specific tool call signature for a given human query
     MAX_TOOL_ATTEMPTS = 2
 
-    human_query_content = state.get("human_query") # Extracted by extract_input
+    human_query_content = state.get("human_query")  # Extracted by extract_input
     previous_initiating_query = state.get("initiating_human_query")
-    
+
     if previous_initiating_query != human_query_content:
         current_loop_tracker = {}
         # This is a new interaction chain, set current human query as the initiator
         initiating_human_query_for_state_update = human_query_content
     else:
-        current_loop_tracker = state.get("tool_call_loop_tracker", {}).copy() # Use copy
+        current_loop_tracker = state.get(
+            "tool_call_loop_tracker", {}
+        ).copy()  # Use copy
         initiating_human_query_for_state_update = previous_initiating_query
 
     llm_with_tools = llm_selector().bind_tools(tools)
@@ -214,7 +218,9 @@ async def call_agent(state: GraphState) -> GraphState:
     #   f"Use Context only if required: \n\n{current_messages_with_system_prompt}\n\n"
     # This implies the LLM was perhaps not a ChatModel or not used in chat mode.
     # Assuming a ChatModel:
-    messages_for_llm = current_messages + [HumanMessage(content=state.get("human_query", ""))]
+    messages_for_llm = current_messages + [
+        HumanMessage(content=state.get("human_query", ""))
+    ]
 
     try:
         # Using the message list directly with a chat model
@@ -227,10 +233,12 @@ async def call_agent(state: GraphState) -> GraphState:
             for tc in result.tool_calls:
                 # Create a stable signature for the tool call
                 tool_signature = f"{tc.name}|{json.dumps(tc.args, sort_keys=True)}"
-                
+
                 current_attempt_count = current_loop_tracker.get(tool_signature, 0) + 1
-                current_loop_tracker[tool_signature] = current_attempt_count # Update tracker
-                
+                current_loop_tracker[tool_signature] = (
+                    current_attempt_count  # Update tracker
+                )
+
                 if current_attempt_count > MAX_TOOL_ATTEMPTS:
                     logger.warning(
                         f"Tool call {tool_signature} for query '{human_query_content}' "
@@ -239,7 +247,7 @@ async def call_agent(state: GraphState) -> GraphState:
                     loop_broken_this_turn = True
                 else:
                     processed_tool_calls.append(tc)
-            
+
             if loop_broken_this_turn and not processed_tool_calls:
                 # All tool calls in this AIMessage were suppressed
                 result.content = (
@@ -251,14 +259,14 @@ async def call_agent(state: GraphState) -> GraphState:
                 # Some calls were processed, some were suppressed.
                 result.tool_calls = processed_tool_calls
             # else: # No loop broken for any tool call in this AIMessage - tool_calls already set if not empty
-                # result.tool_calls = processed_tool_calls # This was redundant if not loop_broken_this_turn
+            # result.tool_calls = processed_tool_calls # This was redundant if not loop_broken_this_turn
 
         return_state = {
             "messages": [result],
             "error": False,
             "interim_response": result.content,
             "tool_call_loop_tracker": current_loop_tracker,
-            "initiating_human_query": initiating_human_query_for_state_update
+            "initiating_human_query": initiating_human_query_for_state_update,
         }
         return return_state
 
@@ -269,11 +277,11 @@ async def call_agent(state: GraphState) -> GraphState:
         )
         # Preserve tracker and initiating query even on general error if possible
         return {
-            "error": True, 
-            "messages": [error_message], 
+            "error": True,
+            "messages": [error_message],
             "interim_response": None,
-            "tool_call_loop_tracker": current_loop_tracker, # Return current state of tracker
-            "initiating_human_query": initiating_human_query_for_state_update # And initiating query
+            "tool_call_loop_tracker": current_loop_tracker,  # Return current state of tracker
+            "initiating_human_query": initiating_human_query_for_state_update,  # And initiating query
         }
 
 
@@ -317,15 +325,15 @@ async def summarize_history(state: GraphState) -> GraphState:
 
     try:
         summary_ai_message = await summarizer_llm.ainvoke([summarization_prompt])
-        
+
         # Create RemoveMessage objects for all existing messages
         messages_to_delete = [RemoveMessage(id=msg.id) for msg in current_messages]
-        
+
         # Add the new summary message
         summary_system_message = SystemMessage(
             content=f"Conversation summary:\n\n{summary_ai_message.content}"
         )
-        
+
         # The new message list starts with removals, then the summary.
         # The human_query is still separate in the state and will be added by call_agent.
         return {"messages": messages_to_delete + [summary_system_message]}
@@ -359,17 +367,17 @@ async def send_response(state: GraphState) -> GraphState:
     try:
         # Get the latest version of the base system prompt
         updated_system_prompt_str = await update_prompt(FOOD_PROMPT)
-        
+
         # Construct the prompt for the refinement LLM
         prompt_for_refinement = (
             f"Only respond to the user's query: {human_query_content}\n\n"
             f"Use Context only if required: \n{updated_system_prompt_str}\n\n"
             f"Please use intermediate response only if required:\n{interim_response_content}"
         )
-        
+
         # Invoke the refinement LLM. Assuming it takes a string prompt.
         final_ai_response = await refinement_llm.ainvoke(prompt_for_refinement)
-        
+
         return {"messages": [final_ai_response], "error": False}
     except Exception:
         logger.exception("Failed to generate final response in send_response.")
@@ -395,7 +403,7 @@ def setup_workflow() -> StateGraph:
     workflow_graph.add_node("call_agent", call_agent)
     workflow_graph.add_node("summarize_history", summarize_history)
     workflow_graph.add_node("send_response", send_response)
-    workflow_graph.add_node("search_tools", ToolNode(tools)) # Node for executing tools
+    workflow_graph.add_node("search_tools", ToolNode(tools))  # Node for executing tools
 
     # Define entry point and initial transitions
     workflow_graph.add_edge(START, "extract_input")
@@ -405,32 +413,36 @@ def setup_workflow() -> StateGraph:
         "extract_input",
         check_input,
         {
-            "send_empty_warning": "send_empty_warning", # If input is empty
-            "call_agent": "call_agent",              # If input is valid, short history
-            "summarize_history": "summarize_history",# If input is valid, long history
+            "send_empty_warning": "send_empty_warning",  # If input is empty
+            "call_agent": "call_agent",  # If input is valid, short history
+            "summarize_history": "summarize_history",  # If input is valid, long history
         },
     )
 
-    workflow_graph.add_edge("send_empty_warning", END) # End if input was empty
+    workflow_graph.add_edge("send_empty_warning", END)  # End if input was empty
 
     # Conditional routing after agent call (tools or end)
     workflow_graph.add_conditional_edges(
         "call_agent",
-        tools_condition, # Checks if AIMessage from call_agent contains tool_calls
+        tools_condition,  # Checks if AIMessage from call_agent contains tool_calls
         {
-            "tools": "search_tools", # If tools need to be called
-            END: "send_response",    # If no tools, proceed to final response generation
+            "tools": "search_tools",  # If tools need to be called
+            END: "send_response",  # If no tools, proceed to final response generation
         },
     )
-    workflow_graph.add_edge("search_tools", "call_agent") # After tool execution, go back to agent
-    workflow_graph.add_edge("summarize_history", "call_agent") # After summarization, go to agent
-    workflow_graph.add_edge("send_response", END) # Final response generated, end
+    workflow_graph.add_edge(
+        "search_tools", "call_agent"
+    )  # After tool execution, go back to agent
+    workflow_graph.add_edge(
+        "summarize_history", "call_agent"
+    )  # After summarization, go to agent
+    workflow_graph.add_edge("send_response", END)  # Final response generated, end
 
     return workflow_graph
 
 
 # Compile the workflow for use
-food_agent_graph = setup_workflow().compile()
+food_agent = setup_workflow().compile()
 
 
 async def expose_agent() -> StateGraph:
@@ -463,21 +475,27 @@ def run_agent() -> None:
         graph_memory = AsyncSqliteSaver(db_connection)
         agent_instance = setup_workflow().compile(checkpointer=graph_memory)
 
-        sample_input_message = [HumanMessage(content="What are some healthy breakfast options?")]
+        sample_input_message = [
+            HumanMessage(content="What are some healthy breakfast options?")
+        ]
         # For stateful invocations, a thread_id is required for the checkpointer.
         thread_id = str(uuid.uuid4())
         config = RunnableConfig({"thread_id": thread_id})
 
-        print(f"Invoking agent with thread_id: {thread_id} and input: {sample_input_message[0].content}")
+        print(
+            f"Invoking agent with thread_id: {thread_id} and input: {sample_input_message[0].content}"
+        )
         result = await agent_instance.ainvoke(
-            {"messages": sample_input_message, "error": False}, # Initial state
+            {"messages": sample_input_message, "error": False},  # Initial state
             config=config,
         )
         print("\nAgent Result:")
         print(result)
         if result and result.get("messages"):
             final_message = result["messages"][-1]
-            print(f"\nFinal Message Content: {getattr(final_message, 'content', 'N/A')}")
+            print(
+                f"\nFinal Message Content: {getattr(final_message, 'content', 'N/A')}"
+            )
 
     asyncio.run(main())
 

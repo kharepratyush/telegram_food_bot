@@ -39,9 +39,9 @@ from src.agents.utils.db import get_recent_food_log
 FOOD_PROMPT = """
 You are a knowledgeable food assistant specializing in diabetic-friendly meal planning, with a focus on North Indian cuisine for pregnant individuals managing diabetes.
 
-Always respond in Markdown and include textual recommendations:
+Always respond in Markdown:
 
-- You will always create meal plan - you can not refuse to create meal plan.
+- Dont reply with meal plan unless explicitly asked.
 - Search internet to get details if required
 - Detailed macro- and micronutrient breakdowns for each recipe or meal suggestion
 - Evidence-based insights from dietitians and endocrinologists on diet, exercise, and self-care during pregnancy
@@ -100,7 +100,7 @@ async def update_prompt(base_prompt: str) -> str:
     """
     try:
         recent_logs = await get_recent_food_log()
-    except Exception: # Catch potential DB errors from the updated get_recent_food_log
+    except Exception:  # Catch potential DB errors from the updated get_recent_food_log
         # If get_recent_food_log itself handles the error and returns [],
         # this broader catch might not be strictly necessary unless other errors occur.
         # Assuming get_recent_food_log now returns [] on error.
@@ -115,8 +115,7 @@ async def update_prompt(base_prompt: str) -> str:
         )
         # Prepend the "Don't repeat" message, then the "Recent food log" header, then the logs
         prompt_addition = (
-            f"{dont_repeat_message}\n\n"
-            f"Recent food log:\n{log_entries_str}"
+            f"{dont_repeat_message}\n\n" f"Recent food log:\n{log_entries_str}"
         )
         # The problem description for tests implied "Dont repeat" *before* "Recent food log:"
         # and the food log section *appended* to the main prompt.
@@ -127,4 +126,3 @@ async def update_prompt(base_prompt: str) -> str:
         # The tests for prompts.py confirm this structure.
         return f"{base_prompt}{prompt_addition}"
     return base_prompt
-```
