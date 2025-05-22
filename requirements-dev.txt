@@ -1,5 +1,6 @@
 # Development dependencies for testing and static analysis
 pytest
+pytest-mock
 pytest-asyncio
 flake8
 black

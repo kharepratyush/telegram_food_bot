@@ -15,23 +15,23 @@ from src.agents.tools import get_future_date, get_today_date, get_tomorrow_date
 
 
 def test_get_today_date_format():
-    result = get_today_date()
+    result = get_today_date.invoke({})
     assert result.startswith("Today is ")
     assert re.match(r"Today is \d{4}-\d{2}-\d{2}, \w+", result)
 
 
 def test_get_tomorrow_date_format():
-    result = get_tomorrow_date()
+    result = get_tomorrow_date.invoke({})
     assert result.startswith("Tomorrow is ")
     assert re.match(r"Tomorrow is \d{4}-\d{2}-\d{2}, \w+", result)
 
 
 def test_get_future_date_offset_one():
-    result = get_future_date(1)
+    result = get_future_date.invoke({"date_offset": 1})
     assert result.startswith("Tomorrow is ")
 
 
 def test_get_future_date_offset_multiple():
     offset = 5
-    result = get_future_date(offset)
+    result = get_future_date.invoke({"date_offset": offset})
     assert result.startswith(f"In {offset} days it will be ")

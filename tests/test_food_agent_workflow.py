@@ -2,7 +2,8 @@ import pytest
 import pytest_asyncio
 from unittest.mock import patch, MagicMock
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
-from langchain_core.tools import ToolCall, tool
+from langchain_core.messages import ToolCall
+from langchain_core.tools import tool
 import inspect
 import json  # Added for tool signature
 
