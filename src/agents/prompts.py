@@ -100,10 +100,7 @@ async def update_prompt(base_prompt: str) -> str:
     """
     try:
         recent_logs = await get_recent_food_log()
-    except Exception:  # Catch potential DB errors from the updated get_recent_food_log
-        # If get_recent_food_log itself handles the error and returns [],
-        # this broader catch might not be strictly necessary unless other errors occur.
-        # Assuming get_recent_food_log now returns [] on error.
+    except Exception:
         recent_logs = []
 
     if recent_logs:

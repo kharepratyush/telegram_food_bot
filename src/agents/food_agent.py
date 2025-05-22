@@ -112,9 +112,10 @@ async def extract_input(state: GraphState) -> GraphState:
         ),
         None,
     )
-    human_query_content = ""
     if last_user_message:
         human_query_content = last_user_message.content
+    else:
+        human_query_content = None
 
     updated_system_prompt = await update_prompt(FOOD_PROMPT)
     initial_messages = [SystemMessage(content=updated_system_prompt)]

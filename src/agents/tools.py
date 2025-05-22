@@ -83,20 +83,17 @@ def get_tomorrow_date() -> str:
     return "Tomorrow is " + tomorrow.strftime("%Y-%m-%d, %A")
 
 
-@tool("get_future_date", return_direct=False)
-def get_future_date(days_from_current_date: int = 1) -> str:
-    """Provides information about a future date.
-
+@tool
+def get_future_date(date_offset: int) -> str:
+    """Gets the date N days in the future.
     Args:
-        days_from_current_date (int): Number of days from today.
+        date_offset: Number of days in the future
     """
-    offset = int(days_from_current_date)
-    future_date = datetime.now() + timedelta(days=offset)
-    if offset == 1:
-        prefix = "Tomorrow is "
+    future_date = datetime.now() + timedelta(days=date_offset)
+    if date_offset == 1:
+        return f"Tomorrow is {future_date.strftime('%Y-%m-%d')}, {future_date.strftime('%A')}"
     else:
-        prefix = f"In {offset} days it will be "
-    return prefix + future_date.strftime("%Y-%m-%d, %A")
+        return f"In {date_offset} days it will be {future_date.strftime('%Y-%m-%d')}, {future_date.strftime('%A')}"
 
 
 def get_tools():

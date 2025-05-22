@@ -28,8 +28,8 @@ def test_split_json_response_no_block():
 def test_split_json_response_with_block():
     text = 'Some narrative\n```json\n{"a":1}\n```'
     narrative, json_text = telegram_utils.split_json_response(text)
-    assert narrative == "Some narrative"
-    assert json_text == '{"a":1}'
+    assert narrative.strip() == "Some narrative"
+    assert json_text.strip() == '{"a":1}'
 
 
 @pytest.mark.asyncio

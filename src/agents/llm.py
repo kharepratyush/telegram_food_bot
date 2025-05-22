@@ -20,6 +20,7 @@ def llm_selector(openai_model=None):
             timeout=None,
             max_retries=2,
         )
+        return llm
 
     elif LLM == "ollama":
         llm = ChatOllama(
@@ -30,6 +31,7 @@ def llm_selector(openai_model=None):
             timeout=None,
             max_retries=2,
         )
+        return llm
 
     elif LLM == "openai":
         llm = ChatOpenAI(
@@ -39,6 +41,7 @@ def llm_selector(openai_model=None):
             timeout=None,
             max_retries=2,
         )
+        return llm
 
     else:
         llm = ChatOpenAI(
@@ -48,5 +51,4 @@ def llm_selector(openai_model=None):
             timeout=None,
             max_retries=2,
         )
-
-    return llm
+        return llm
